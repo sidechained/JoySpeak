@@ -1,0 +1,33 @@
+# ==========================================
+# KiCad 10 Subdirectory Ignored Files
+# ==========================================
+
+# KiCad Local History (KiCad 9.0+)
+kicad/.history/
+
+# Temporary and Backup files
+kicad/*.000
+kicad/*.bak
+kicad/*.bck
+kicad/*.kicad_pcb-bak
+kicad/*.kicad_sch-bak
+kicad/*-backups/
+kicad/_autosave-*
+kicad/*.tmp
+kicad/*-save.pro
+kicad/*-save.kicad_pcb
+
+# Caches
+kicad/fp-info-cache
+
+# Local user/project layout settings (window positions, active layers, etc.)
+kicad/*.kicad_prl
+
+# Optional: Output / Manufacturing files 
+# (Uncomment the lines below if you generate these files inside the kicad folder 
+# and prefer not to track them in Git)
+# kicad/*.net
+# kicad/*.dsn
+# kicad/*.ses
+# kicad/*.xml
+# kicad/*.csv
