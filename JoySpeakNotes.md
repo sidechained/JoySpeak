@@ -1,3 +1,21 @@
+# Conceptual - completion of spec
+
+# Schematic
+
+# PCB
+
+- speaker choice
+- Routing - componenent separation
+- RJ45 in centre (hanging)
+- Speaker pins
+- tildagon mount points
+two M2-size standoffs below the board, 25mm apart. They are 3.525mm from the centerline of the standard hexagon, and 14.25mm from the front edge of the connection tab. You can use two M2 size screws to attach your hexpansion to these standoffs for increased mechanical strength. Unfortunately, it's not possible to do this without removing the top board of the main badge, so installing and removing hexpansions with these screws is a bit more effort.
+
+
+
+Driving a $4\ \Omega$ speaker pushes more current through the chip than an $8\ \Omega$ speaker
+
+
 # Project Definition
 
 I'm making an impromptu network of small speaker-devices with Waveshare RP2040-Zero brains where control data from a onboard 2-potentiometer joystick will be sent across a network and be availabe to any of the devices to control it's onboard synthesis model. All joysticks should be able to "talk" or send data, received by all, who can then pick which data they wish to tune into. The devices should be hot pluggable, should be able to share central power and may be up to 2 meters apart. 
@@ -106,6 +124,8 @@ We need to handle star and daisy chain topologies
 - Power split and sent to each node. Each cable only has to carry the electricity for one single node (0.65A max)
 - Data lines all joined together, with stiff 1k  resistor between that central data knot and GND inside the box
 
+
+Dual-Port RJ45 PCB
 
 ### Daisy Chain (for fun play)
 
