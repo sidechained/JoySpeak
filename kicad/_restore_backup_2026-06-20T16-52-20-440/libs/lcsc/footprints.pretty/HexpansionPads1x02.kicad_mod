@@ -1,0 +1,86 @@
+(footprint "HexpansionPads1x02"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(property "Value" "Conn_01x03_Pin"
+		(at 0 1 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "969b65fd-0469-4b7d-a6d0-27d0e7170769")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "673cf4f9-6a28-4071-97ce-b4b983cf36d5")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "Generic connector, single row, 01x03, script generated"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "66c6928a-4c21-4001-8ac1-196cbc51f4fa")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Reference" "J3"
+		(at 0 0.643 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "254b5dab-b640-457c-b384-79c4819229db")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+		)
+	)
+	(property ki_fp_filters "Connector*:*_1x??_*")
+	(sheetname "/")
+	(sheetfile "JoySpeak.kicad_sch")
+	(attr exclude_from_bom)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_text user "${REFERENCE}"
+		(at 0 2.5 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "a851d6f0-ee9c-4aa1-abaf-d432741af27f")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd rect
+		(at 0 -1.143)
+		(size 3.5 1.7)
+		(layers "F.Cu" "F.Mask")
+		(uuid "3d1b831b-1ff0-455f-8d54-d5b1ba4ae26c")
+	)
+	(pad "2" smd rect
+		(at 0 1.143)
+		(size 3.5 1.7)
+		(layers "F.Cu" "F.Mask")
+		(uuid "0e264ab3-2147-4b62-8f5b-2377b640391a")
+	)
+	(embedded_fonts no)
+)

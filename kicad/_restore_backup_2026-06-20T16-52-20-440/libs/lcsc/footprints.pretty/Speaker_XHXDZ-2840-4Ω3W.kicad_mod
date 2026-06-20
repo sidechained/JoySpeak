@@ -1,0 +1,164 @@
+(footprint "Speaker_XHXDZ-2840-4Ω3W"
+	(version 20260206)
+	(generator "pcbnew")
+	(generator_version "10.0")
+	(layer "F.Cu")
+	(property "Reference" "LS1"
+		(at 0 -0.5 0)
+		(unlocked yes)
+		(layer "F.SilkS")
+		(uuid "681cd7db-a9a9-4f2f-9d39-165b942afe6b")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.1)
+			)
+		)
+	)
+	(property "Value" "Speaker"
+		(at 0 1 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "036939a5-e169-4c9c-82c9-5c01a3525031")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Datasheet" ""
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "9a5945df-c3cc-4c6d-9e8d-bca2633a9f9a")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "Description" "Speaker"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "a166574a-dc0d-403c-978c-a0d60f4d61f0")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(property "LCSC" "C969976"
+		(at 0 0 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(hide yes)
+		(uuid "22a22463-66dc-4155-af24-32455c9cb3ce")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(sheetname "/")
+	(sheetfile "JoySpeak.kicad_sch")
+	(attr exclude_from_bom)
+	(duplicate_pad_numbers_are_jumpers no)
+	(fp_rect
+		(start -20 -14.2)
+		(end 20 14.2)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "F.SilkS")
+		(uuid "d9f18e55-8904-40f7-9813-db3e03eba654")
+	)
+	(fp_circle
+		(center -16.8 -11)
+		(end -15.2 -11)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "Edge.Cuts")
+		(uuid "4c6ce9b0-5c0d-4806-b06c-032f05d8a87f")
+	)
+	(fp_circle
+		(center -16.8 11)
+		(end -15.2 11)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "Edge.Cuts")
+		(uuid "6ad5cfbc-56f3-4f4e-8130-276f3b3be9cd")
+	)
+	(fp_circle
+		(center 0 0)
+		(end 9 0)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "Edge.Cuts")
+		(uuid "b8057ae2-8b57-4c0b-b586-2cb470a177be")
+	)
+	(fp_circle
+		(center 16.8 -11)
+		(end 18.4 -11)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "Edge.Cuts")
+		(uuid "71eafee7-3e32-4c5f-aa39-65637094a88a")
+	)
+	(fp_circle
+		(center 16.8 11)
+		(end 18.4 11)
+		(stroke
+			(width 0.1)
+			(type solid)
+		)
+		(fill no)
+		(layer "Edge.Cuts")
+		(uuid "66f31af9-71f9-408c-9c6c-8d5fcc69300b")
+	)
+	(fp_text user "${REFERENCE}"
+		(at 0 2.5 0)
+		(unlocked yes)
+		(layer "F.Fab")
+		(uuid "46bbb682-2822-4a6b-8543-514b1d14aeda")
+		(effects
+			(font
+				(size 1 1)
+				(thickness 0.15)
+			)
+		)
+	)
+	(pad "1" smd rect
+		(at 14.8 -7 90)
+		(size 3.5 1.7)
+		(layers "F.Cu" "F.Mask")
+		(uuid "d09d0ca2-a6bb-4f4e-8ad4-c3cbc30ad3bb")
+	)
+	(pad "2" smd rect
+		(at 14.8 7 90)
+		(size 3.5 1.7)
+		(layers "F.Cu" "F.Mask")
+		(uuid "8e4c1f84-e09f-4d6f-a7ec-50058c3edaa6")
+	)
+	(embedded_fonts no)
+)
