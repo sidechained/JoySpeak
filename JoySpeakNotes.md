@@ -4,9 +4,9 @@
 
 # PCB
 
-- speaker choice
+- speaker needs mounting on standoffs (11.5 height)
+
 - Routing - componenent separation
-- RJ45 in centre (hanging)
 - Speaker pins
 - tildagon mount points
 two M2-size standoffs below the board, 25mm apart. They are 3.525mm from the centerline of the standard hexagon, and 14.25mm from the front edge of the connection tab. You can use two M2 size screws to attach your hexpansion to these standoffs for increased mechanical strength. Unfortunately, it's not possible to do this without removing the top board of the main badge, so installing and removing hexpansions with these screws is a bit more effort.
