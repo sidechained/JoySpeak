@@ -6762,10 +6762,10 @@
 		)
 		(uuid "8714150b-9301-418d-8783-b555002faf76")
 	)
-	(text_box "Separate ground planes?\nLCSC BOM - add screws 2mm?, nuts\nCheck LCSC quantities\nCheck LCSC + JLC order together\nBuy RP2040s\nDouble check RP2040 cutout\nGo PCBA to confirm chip placement\n"
+	(text_box "Separate ground planes?\nBuy RP2040s on Ali\nDouble check RP2040 cutout\nSimplify silkscreening to values\nDFM check\nLCSC BOM - added standoffs, no screws\nAdd spares to JLC quantities\nCheck LCSC + JLC order together\n$176.78"
 		(exclude_from_sim no)
-		(at 289.56 55.88 0)
-		(size 76.2 16.2161)
+		(at 289.56 55.8947 0)
+		(size 43.18 20.3053)
 		(margins 0.9525 0.9525 0.9525 0.9525)
 		(stroke
 			(width 0)
@@ -6784,8 +6784,8 @@
 	)
 	(text_box "# Networking: 2 modes\n\nStar (Installation mode): In this configuration, no USB cables are used. You have a heavy-duty central 5V power supply inside a distributor box. The box has a permanent $1\\text{ k}\\Omega$ resistor across its central data knot. 40-meter total radiating lines run out to each node using standard Ethernet cables.\n\nDaisy-Chain (Desktop mode): Use 2-wire cables (Data/GND only; 5V is disconnected to prevent backfeeding). Each node powers itself via USB. Plug a \"Terminator Plug\" (a loose RJ45 with a 4.7kΩ resistor between Pin 4 and GND) into any open jack at the end of the chain."
 		(exclude_from_sim no)
-		(at 213.36 -20.8638 0)
-		(size 88.9 28.4838)
+		(at 210.82 -17.78 0)
+		(size 88.9 24.3946)
 		(margins 0.9525 0.9525 0.9525 0.9525)
 		(stroke
 			(width 0)
@@ -6824,7 +6824,7 @@
 	)
 	(text_box "240	10uF							C33546013\n280	100nF							C24497\n40	AUDIO_IN/OUT					C49284725\n40	BLM21PG221SN1D					C85840\n40	SK6812MINI-EA					C5378731\n20	MSM381ACB026					C51928208\n60	470R							C2933707 \n100	4.7k							C2907387 \n20	47k								C2933708 \n20	HC-RJ45-5JA-2-6-S				C5341200\n40	TS-1187A-B-A-B					C318884\n20	TLV320AIC3100					C478458\n20	YV13S-L7.85-B10KA(60)-0-DL01	C37323747\n20	AMS1117-1.8						C347220\n20	Speaker							C50387235\n80	RP2040_VOLTAGE_JUMPER			C32713269\n80 	Shunt jumpers					C5305\n\n+ 10%\n\n264	10uF							C33546013\n308	100nF							C24497\n44	AUDIO_IN/OUT					C49284725\n44	BLM21PG221SN1D					C85840\n44	SK6812MINI-EA					C5378731\n22	MSM381ACB026					C51928208\n66	470R							C2933707 \n110	4.7k							C2907387 \n22	47k								C2933708 \n22	HC-RJ45-5JA-2-6-S				C5341200\n44	TS-1187A-B-A-B					C318884\n22	TLV320AIC3100					C478458\n22	YV13S-L7.85-B10KA(60)-0-DL01	C37323747\n22	AMS1117-1.8						C347220\n22	Speaker							C50387235\n88	RP2040_VOLTAGE_JUMPER			C32713269\n88 	Shunt jumpers					C5305"
 		(exclude_from_sim no)
-		(at 289.56 93.98 0)
+		(at 289.56 76.2 0)
 		(size 63.5 77.5549)
 		(margins 0.9525 0.9525 0.9525 0.9525)
 		(stroke

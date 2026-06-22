@@ -76,7 +76,32 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [],
+      "drc_exclusions": [
+        [
+          "starved_thermal|110003604|82529997|91bbe2ae-5f19-4bd2-a276-07c6faac7916|441b4565-bf4f-470f-9b2f-47c7d4dd7608|B.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|110403604|82529997|fb0809a3-e923-4746-a50b-c151faad63ed|7b7ecbb3-ac21-48c1-8ebd-04c01c9b62d7|F.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|112803604|82529997|fb0809a3-e923-4746-a50b-c151faad63ed|ff9db797-9ae7-4897-9f31-0866a050c6e0|F.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|115203604|82529997|fb0809a3-e923-4746-a50b-c151faad63ed|af16cf47-af0e-47eb-8165-48f5c5798c5c|F.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|117203604|82529997|91bbe2ae-5f19-4bd2-a276-07c6faac7916|1481223d-df52-4562-af72-be76ef343b19|B.Cu",
+          ""
+        ],
+        [
+          "starved_thermal|117603604|82529997|fb0809a3-e923-4746-a50b-c151faad63ed|ef60de48-12ef-4806-bf55-c796f86b5d3c|F.Cu",
+          ""
+        ]
+      ],
       "meta": {
         "version": 2
       },
@@ -148,7 +173,7 @@
         "max_error": 0.005,
         "min_clearance": 0.0,
         "min_connection": 0.0,
-        "min_copper_edge_clearance": 0.5,
+        "min_copper_edge_clearance": 0.2,
         "min_groove_width": 0.0,
         "min_hole_clearance": 0.25,
         "min_hole_to_hole": 0.25,
@@ -530,7 +555,7 @@
       },
       {
         "bus_width": 15,
-        "clearance": 0.25,
+        "clearance": 0.2,
         "line_style": 0,
         "name": "1V8",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
@@ -544,7 +569,7 @@
       },
       {
         "bus_width": 20,
-        "clearance": 0.25,
+        "clearance": 0.2,
         "line_style": 0,
         "name": "3V3",
         "pcb_color": "rgba(0, 0, 0, 0.000)",
