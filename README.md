@@ -3,5 +3,4 @@ JoySpeak is an open-hardware joystick controlled speaker kit that can be hung an
 We plan to take this project to this year's Chaos Communication Congress (40c3) and offer kits to build at the Hardware Hacking Area there. The kit itself teaches modern surface mount soldering techniques alongside knowledge of working with audio codecs and wired networking. Once built, Model Citizen's can choose to loan their kit back to us during the congress, to increase the scale of the installation, then claim it back at the end when they need to leave (coat-check style!)
 
 <img src="./images/combined.png" alt="JoySpeak installation" width="100%">
-
 We want to explore and encourage a more communal way of working with open-hardware kits at festival and events, that are not just about buying an 'owning' an object but about building something collectively where each kit and it's builder contribute to the scope and scale of the installation throughout the event.
