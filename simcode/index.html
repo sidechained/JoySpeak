@@ -1,0 +1,1223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>JoySpeak Node Sim</title>
+<style>
+  /* ── Page Layout ── */
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: #0d0d1a;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    min-height: 100vh;
+    font-family: 'Courier New', monospace;
+    color: #8888aa;
+  }
+  h1 {
+    font-size: 11px;
+    letter-spacing: 3px;
+    text-transform: uppercase;
+    margin-bottom: 12px;
+    color: #5555aa;
+  }
+  #canvas-wrapper {
+    position: relative;
+    width: 220px;
+    height: 180px;
+  }
+  canvas {
+    display: block;
+    border-radius: 14px;
+    cursor: default;
+    user-select: none;
+  }
+  /* ── Click-to-start overlay ── */
+  #start-overlay {
+    position: absolute;
+    inset: 0;
+    background: rgba(10,10,30,0.92);
+    border-radius: 14px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    cursor: pointer;
+    z-index: 10;
+  }
+  #start-overlay span {
+    font-size: 10px;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    color: #7b68ee;
+  }
+  #start-overlay .pulse {
+    width: 14px; height: 14px;
+    border-radius: 50%;
+    background: #7b68ee;
+    animation: pulse 1.4s ease-in-out infinite;
+  }
+  @keyframes pulse {
+    0%,100% { opacity: 0.3; transform: scale(0.85); }
+    50%      { opacity: 1;   transform: scale(1.15); }
+  }
+  #info {
+    margin-top: 10px;
+    font-size: 9px;
+    letter-spacing: 1px;
+    color: #44446a;
+    text-align: center;
+    line-height: 1.8;
+  }
+</style>
+</head>
+<body>
+<h1>JoySpeak</h1>
+<div id="canvas-wrapper">
+  <canvas id="c" width="220" height="180"></canvas>
+  <div id="start-overlay">
+    <div class="pulse"></div>
+    <span>Click to Start</span>
+  </div>
+</div>
+<div id="info">
+  KEY 0: Pot &nbsp;|&nbsp; KEY 1: Setup &nbsp;|&nbsp; KEY 2: Gesture<br>
+  Gamepad: L-Stick · A · B · L3
+</div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════
+//  JoySpeak Node Simulator
+//  Single-file, zero-dependency, Web Audio + Canvas + Gamepad API
+// ═══════════════════════════════════════════════════════════════════
+
+// ── Audio DSP ── (ScriptProcessorNode; AudioWorklet blocked on file://) ──
+// AudioWorklet removed — using ScriptProcessorNode instead (works from file://)
+
+// ═══════════════════════════════════════════════════════════════════
+//  Constants & Geometry
+// ═══════════════════════════════════════════════════════════════════
+
+const W = 220, H = 180;
+
+// Layout regions (all in canvas pixels)
+// Canvas is 220×180; three columns: joystick | oscilloscope | buttons
+const MCU_LED   = { x: 110, y: 12, r: 7 };
+const JOY_CX    = 50,  JOY_CY = 95, JOY_R = 44;    // joystick — left column
+const OSC_CX    = 138, OSC_CY = 95, OSC_R = 22;    // oscilloscope — centre-right, smaller
+// Right column: BTN0 (pot) | LED1+BTN1 | LED2+BTN2
+const BTN0      = { x: 172, y: 30,  w: 36, h: 18, r: 4 };  // Pot-Button (key 0)
+const BTN1      = { x: 172, y: 88,  w: 36, h: 20, r: 4 };  // Setup (key 1)
+const BTN2      = { x: 172, y: 138, w: 36, h: 20, r: 4 };  // Gesture (key 2)
+const LED1      = { x: 190, y: 76,  r: 5 };
+const LED2      = { x: 190, y: 126, r: 5 };
+const PUCK_R    = 11;
+
+// Cardinal directions (N=up, E=right, S=down, W=left) in radians
+// Canvas Y is flipped: north = -π/2 (up on screen)
+const CARD_ANGLES = {
+  UP:    -Math.PI / 2,
+  RIGHT:  0,
+  DOWN:   Math.PI / 2,
+  LEFT:   Math.PI,
+};
+// Tiny diamond marker positions at boundary
+const CARD_MARKERS = {
+  UP:    { x: JOY_CX,        y: JOY_CY - JOY_R },
+  RIGHT: { x: JOY_CX + JOY_R, y: JOY_CY },
+  DOWN:  { x: JOY_CX,        y: JOY_CY + JOY_R },
+  LEFT:  { x: JOY_CX - JOY_R, y: JOY_CY },
+};
+
+// Param focus cycle in Setup Mode
+const PARAM_FOCUS = ['FREQUENCY', 'HARMONICS', 'TIMBRE', 'MORPH'];
+const FOCUS_COLORS = {
+  FREQUENCY: '#ffffff',
+  HARMONICS: '#ff4444',
+  TIMBRE:    '#44ff44',
+  MORPH:     '#4466ff',
+};
+
+// Default Cardinal Presets
+const DEFAULT_PRESETS = {
+  UP:    { freq: 440, harmonics: 0.3, timbre: 0.5, morph: 0.5 },
+  RIGHT: { freq: 880, harmonics: 0.7, timbre: 0.8, morph: 0.3 },
+  DOWN:  { freq: 220, harmonics: 0.5, timbre: 0.3, morph: 0.7 },
+  LEFT:  { freq: 660, harmonics: 0.2, timbre: 0.6, morph: 0.4 },
+};
+
+// ═══════════════════════════════════════════════════════════════════
+//  Utility helpers
+// ═══════════════════════════════════════════════════════════════════
+const clamp  = (v, lo, hi) => Math.max(lo, Math.min(hi, v));
+const lerp   = (a, b, t)   => a + (b - a) * t;
+const TWO_PI = Math.PI * 2;
+
+/** Angular distance, wrapped to [-π, π] */
+function angleDiff(a, b) {
+  let d = b - a;
+  while (d >  Math.PI) d -= TWO_PI;
+  while (d < -Math.PI) d += TWO_PI;
+  return d;
+}
+
+/** Radial interpolation weight: cos²(dθ), zeroed outside 90° */
+function radialWeight(theta, presetAngle) {
+  const diff = angleDiff(theta, presetAngle);
+  if (Math.abs(diff) >= Math.PI / 2) return 0;
+  const c = Math.cos(diff);
+  return c * c;
+}
+
+/** Draw a rounded rectangle path */
+function roundRect(ctx, x, y, w, h, r) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.arcTo(x + w, y, x + w, y + r, r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.arcTo(x + w, y + h, x + w - r, y + h, r);
+  ctx.lineTo(x + r, y + h);
+  ctx.arcTo(x, y + h, x, y + h - r, r);
+  ctx.lineTo(x, y + r);
+  ctx.arcTo(x, y, x + r, y, r);
+  ctx.closePath();
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  AudioEngine  –  manages AudioContext + JoySpeakProcessor node
+// ═══════════════════════════════════════════════════════════════════
+class AudioEngine {
+  constructor() {
+    this.ctx      = null;
+    this.node     = null;
+    this.analyser = null;
+    this.ready    = false;
+    this._oscBuf  = new Float32Array(256);
+
+    // Live param object — written by setParam(); read by onaudioprocess()
+    this.p = {
+      frequency:  440,
+      harmonics:  0.3,
+      timbre:     0.5,
+      morph:      0.5,
+      lpg_gate:   0,
+      lpg_peak:   0.8,
+      lpg_attack: 0.1,
+      lpg_decay:  0.3,
+      amplitude:  1,
+    };
+
+    // DSP state — written only inside onaudioprocess()
+    this._phase1   = 0;
+    this._phase2   = 0;
+    this._fb1      = 0;
+    this._fb2      = 0;
+    this._prevFb2  = 0;
+    this._env      = 0;
+    this._prevGate = 0;
+    this._lpfState = 0;
+  }
+
+  async init() {
+    this.ctx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
+
+    // ── ScriptProcessorNode ──
+    // AudioWorklet cannot load blob:/data: URLs from file:// in Chrome.
+    // ScriptProcessorNode is deprecated but works universally from file://.
+    const bufSize = 512;
+    this.node = this.ctx.createScriptProcessor(bufSize, 0, 2);
+
+    const SR  = this.ctx.sampleRate;
+    const TP  = Math.PI * 2;
+    const p   = this.p;
+    const dsp = this;
+
+    this.node.onaudioprocess = (ev) => {
+      const outL = ev.outputBuffer.getChannelData(0);
+      const outR = ev.outputBuffer.getChannelData(1);
+      const N    = outL.length;
+
+      const freq      = p.frequency;
+      const harmonics = p.harmonics;
+      const timbre    = p.timbre;
+      const morph     = p.morph;
+      const gate      = p.lpg_gate;
+      const peak      = p.lpg_peak;
+      const lpgAtk    = p.lpg_attack;
+      const lpgDcy    = p.lpg_decay;
+      const amp       = p.amplitude;
+
+      const atkMs   = 1  + lpgAtk * 499;
+      const dcyMs   = 10 + lpgDcy * 4990;
+      const atkCoef = Math.exp(-1 / (SR * atkMs  * 0.001));
+      const dcyCoef = Math.exp(-1 / (SR * dcyMs  * 0.001));
+
+      const ratio    = Math.pow(8, harmonics);
+      const modIndex = timbre * 20;
+
+      const fbAmt = morph * 1.5;
+      const op1Fb = (morph < 0.5) ? fbAmt * 2 : 0;
+      const op2Fb = (morph >= 0.5) ? (morph - 0.5) * 2 * fbAmt : 0;
+
+      const phaseInc1 = (TP * freq) / SR;
+      const phaseInc2 = (TP * freq * ratio) / SR;
+
+      for (let i = 0; i < N; i++) {
+        if (gate >= 0.5) {
+          dsp._env = atkCoef * dsp._env + (1 - atkCoef) * peak;
+        } else {
+          dsp._env = dcyCoef * dsp._env;
+        }
+        const envVal = dsp._env;
+
+        const op2Val = Math.sin(dsp._phase2 + op2Fb * dsp._prevFb2);
+        dsp._prevFb2 = dsp._fb2;
+        dsp._fb2     = op2Val;
+
+        const modSig  = modIndex * op2Val;
+        const op1Val  = Math.sin(dsp._phase1 + modSig + op1Fb * dsp._fb1);
+        dsp._fb1      = op1Val;
+
+        dsp._phase1 = (dsp._phase1 + phaseInc1) % TP;
+        dsp._phase2 = (dsp._phase2 + phaseInc2) % TP;
+
+        const cutoffHz = 200 + envVal * 9800;
+        const lpfCoef  = Math.exp(-TP * cutoffHz / SR);
+        dsp._lpfState  = lpfCoef * dsp._lpfState + (1 - lpfCoef) * op1Val;
+
+        const sample = dsp._lpfState * envVal * amp;
+        outL[i] = sample;
+        outR[i] = sample;
+      }
+      dsp._prevGate = gate;
+    };
+
+    // Analyser for oscilloscope
+    this.analyser = this.ctx.createAnalyser();
+    this.analyser.fftSize = 256;
+
+    // Master gain
+    const master = this.ctx.createGain();
+    master.gain.value = 0.7;
+
+    // Graph: scriptProcessor → analyser → master → dest
+    this.node.connect(this.analyser);
+    this.analyser.connect(master);
+    master.connect(this.ctx.destination);
+
+    this.ready = true;
+  }
+
+  /** Set a synth parameter — called every animation frame */
+  setParam(name, value) {
+    if (!this.ready) return;
+    if (name === 'frequency') {
+      // Smooth frequency glide (one-pole)
+      this.p.frequency += (value - this.p.frequency) * 0.1;
+    } else {
+      this.p[name] = value;
+    }
+  }
+
+  /** Set param immediately (gates, peaks) */
+  setParamNow(name, value) {
+    if (!this.ready) return;
+    this.p[name] = value;
+  }
+
+  /** Get waveform data for oscilloscope (fills float array) */
+  getWaveform(out) {
+    if (this.analyser) this.analyser.getFloatTimeDomainData(out);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  InputState  –  unified merged state from mouse + gamepad
+// ═══════════════════════════════════════════════════════════════════
+class InputState {
+  constructor() {
+    // Joystick: normalized -1..1 on each axis
+    this.joyX = 0;
+    this.joyY = 0;
+    // Buttons (raw boolean)
+    this.btn1     = false;   // Button 1 / Gamepad A
+    this.btn2     = false;   // Button 2 / Gamepad B
+    this.potBtn   = false;   // Pot-Button (left stick click / L3)
+    // Previous frame
+    this.prevBtn1   = false;
+    this.prevBtn2   = false;
+    this.prevPotBtn = false;
+  }
+
+  /** Snapshot prev then merge new values */
+  update(joy, btn1, btn2, potBtn) {
+    this.prevBtn1   = this.btn1;
+    this.prevBtn2   = this.btn2;
+    this.prevPotBtn = this.potBtn;
+    this.joyX  = clamp(joy.x, -1, 1);
+    this.joyY  = clamp(joy.y, -1, 1);
+    this.btn1  = btn1;
+    this.btn2  = btn2;
+    this.potBtn = potBtn;
+  }
+
+  get btn1Pressed()   { return  this.btn1 && !this.prevBtn1; }
+  get btn1Released()  { return !this.btn1 &&  this.prevBtn1; }
+  get btn2Pressed()   { return  this.btn2 && !this.prevBtn2; }
+  get btn2Released()  { return !this.btn2 &&  this.prevBtn2; }
+  get potBtnPressed() { return  this.potBtn && !this.prevPotBtn; }
+
+  get r()     { return Math.sqrt(this.joyX * this.joyX + this.joyY * this.joyY); }
+  get theta() { return Math.atan2(this.joyY, this.joyX); }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  GestureSlot  –  records/plays back joystick XY traces
+// ═══════════════════════════════════════════════════════════════════
+class GestureSlot {
+  constructor() {
+    this.frames = [];   // [{x, y}, ...]
+    this.idx    = 0;
+    this.has    = false;
+  }
+  reset()      { this.frames = []; this.idx = 0; this.has = false; }
+  record(x, y) { this.frames.push({ x, y }); }
+  next()       {
+    if (!this.has || this.frames.length === 0) return null;
+    const f = this.frames[this.idx];
+    this.idx = (this.idx + 1) % this.frames.length;
+    return f;
+  }
+  finalize()   { this.has = this.frames.length > 0; this.idx = 0; }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  JoySpeak  –  main application class
+// ═══════════════════════════════════════════════════════════════════
+class JoySpeak {
+  constructor(canvas) {
+    this.canvas  = canvas;
+    this.ctx2d   = canvas.getContext('2d');
+    this.audio   = new AudioEngine();
+    this.input   = new InputState();
+    this.running = false;
+
+    // Deep-clone presets
+    this.presets = {
+      UP:    { ...DEFAULT_PRESETS.UP },
+      RIGHT: { ...DEFAULT_PRESETS.RIGHT },
+      DOWN:  { ...DEFAULT_PRESETS.DOWN },
+      LEFT:  { ...DEFAULT_PRESETS.LEFT },
+    };
+
+    // ── Mode tracking ──
+    this.mode         = 'PLAY';  // 'PLAY' | 'SETUP' | 'GESTURE'
+    this.setupZone    = null;    // active cardinal zone in Setup
+    this.setupDelta   = 0;       // angle delta for parameter tuning
+    this.setupBaseVal = 0;       // stored param value at zone entry
+    this.focusIdx     = 0;       // index into PARAM_FOCUS
+
+    // ── Gesture tracking ──
+    this.gestureSlots    = [new GestureSlot(), new GestureSlot(), new GestureSlot(), new GestureSlot()];
+    this.activeGestSlot  = 0;    // 0-3
+    this.gestRecording   = false;
+    this.gestPlaying     = false;
+    this.gestBtn2DownAt  = 0;    // timestamp for tap detection
+
+    // ── Visual / Animation state ──
+    this.waveformBuf   = new Float32Array(256);
+    this.mcuHue        = 0;      // for idle VU pulse
+    this.mcuVU         = 0;      // VU meter smoothed
+    this.prevR         = 0;      // for velocity detection
+    this.prevRTime     = performance.now();
+    this.lpgGate       = 0;
+
+    // ── Mouse state (raw canvas coords) ──
+    this.mouse = {
+      down: false,
+      x: 0, y: 0,
+      inJoy: false,   // dragging joystick
+      inBtn0: false,
+      inBtn1: false,
+      inBtn2: false,
+    };
+    this._setupMouseListeners();
+    this._setupKeyListeners();
+    this._potBtnMouseTap = false;  // set by click-outside-buttons handler
+    this.keys = { potBtn: false, btn1: false, btn2: false };  // keyboard key state
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Mouse Listeners
+  // ─────────────────────────────────────────────────
+  _setupMouseListeners() {
+    const c = this.canvas;
+
+    c.addEventListener('mousedown', (e) => {
+      e.preventDefault();
+      const pos = this._canvasPos(e);
+      this.mouse.down = true;
+      this.mouse.x = pos.x;
+      this.mouse.y = pos.y;
+
+      // Check joystick
+      const dx = pos.x - JOY_CX, dy = pos.y - JOY_CY;
+      if (Math.sqrt(dx*dx + dy*dy) <= JOY_R + PUCK_R) {
+        this.mouse.inJoy = true;
+      }
+      // Check Button 1
+      if (this._inRect(pos, BTN0)) { this.mouse.inBtn0 = true; }  // BTN0 = pot
+      if (this._inRect(pos, BTN1)) { this.mouse.inBtn1 = true; }
+      // Check Button 2
+      if (this._inRect(pos, BTN2)) { this.mouse.inBtn2 = true; }
+    });
+
+    c.addEventListener('mousemove', (e) => {
+      if (!this.mouse.down) return;
+      const pos = this._canvasPos(e);
+      this.mouse.x = pos.x;
+      this.mouse.y = pos.y;
+    });
+
+    const endMouse = () => {
+      this.mouse.down  = false;
+      this.mouse.inJoy = false;
+      this.mouse.inBtn0 = false;
+      this.mouse.inBtn1 = false;
+      this.mouse.inBtn2 = false;
+    };
+    c.addEventListener('mouseup',    endMouse);
+    c.addEventListener('mouseleave', endMouse);
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Keyboard Listeners  (keys 1 & 2 = Button 1 & 2)
+  // ─────────────────────────────────────────────────
+  _setupKeyListeners() {
+    window.addEventListener('keydown', (e) => {
+      if (e.repeat) return;          // ignore key-hold auto-repeat
+      if (e.key === '0') this.keys.potBtn = true;  // BTN0 = pot
+      if (e.key === '1') this.keys.btn1 = true;
+      if (e.key === '2') this.keys.btn2 = true;
+    });
+    window.addEventListener('keyup', (e) => {
+      if (e.key === '0') this.keys.potBtn = false;
+      if (e.key === '1') this.keys.btn1 = false;
+      if (e.key === '2') this.keys.btn2 = false;
+    });
+  }
+
+  _canvasPos(e) {
+    const rect = this.canvas.getBoundingClientRect();
+    return {
+      x: (e.clientX - rect.left) * (W / rect.width),
+      y: (e.clientY - rect.top)  * (H / rect.height),
+    };
+  }
+
+  _inRect(pos, rect) {
+    return pos.x >= rect.x && pos.x <= rect.x + rect.w &&
+           pos.y >= rect.y && pos.y <= rect.y + rect.h;
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Init audio + start loop
+  // ─────────────────────────────────────────────────
+  async start() {
+    await this.audio.init();
+    this.running = true;
+    this._loop();
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Main Animation Loop
+  // ─────────────────────────────────────────────────
+  _loop() {
+    if (!this.running) return;
+    requestAnimationFrame(() => this._loop());
+
+    const now = performance.now();
+
+    // a) Poll Gamepad
+    const gpJoy = { x: 0, y: 0 };
+    let gpBtn1 = false, gpBtn2 = false, gpPotBtn = false;
+    const pads = navigator.getGamepads ? navigator.getGamepads() : [];
+    for (const pad of pads) {
+      if (!pad) continue;
+      // Left stick
+      gpJoy.x = pad.axes[0] || 0;
+      gpJoy.y = pad.axes[1] || 0;
+      gpBtn1   = pad.buttons[0]?.pressed || false;
+      gpBtn2   = pad.buttons[1]?.pressed || false;
+      // Standard L3 is button 10, some controllers map to 9 or 11
+      gpPotBtn = pad.buttons[10]?.pressed || pad.buttons[9]?.pressed || pad.buttons[11]?.pressed || false;
+      break;
+    }
+
+    // b) Mouse joystick
+    let mouseJoyX = 0, mouseJoyY = 0;
+    if (this.mouse.inJoy) {
+      const rawX = this.mouse.x - JOY_CX;
+      const rawY = this.mouse.y - JOY_CY;
+      const dist = Math.sqrt(rawX*rawX + rawY*rawY);
+      const capped = Math.min(dist, JOY_R - PUCK_R);
+      const ang = Math.atan2(rawY, rawX);
+      mouseJoyX = (Math.cos(ang) * capped) / (JOY_R - PUCK_R);
+      mouseJoyY = (Math.sin(ang) * capped) / (JOY_R - PUCK_R);
+    }
+
+    // Merge: gamepad takes priority if non-zero
+    const joyX = (Math.abs(gpJoy.x) + Math.abs(gpJoy.y) > 0.05)
+      ? gpJoy.x : mouseJoyX;
+    const joyY = (Math.abs(gpJoy.x) + Math.abs(gpJoy.y) > 0.05)
+      ? gpJoy.y : mouseJoyY;
+
+    const btn1    = gpBtn1   || this.mouse.inBtn1 || this.keys.btn1;
+    const btn2    = gpBtn2   || this.mouse.inBtn2 || this.keys.btn2;
+    const potBtn  = gpPotBtn || this.mouse.inBtn0  || this.keys.potBtn || this._potBtnMouseTap;
+    this._potBtnMouseTap = false;  // consume
+
+    // Update unified input
+    this.input.update({ x: joyX, y: joyY }, btn1, btn2, potBtn);
+
+    // c) Run mode logic
+    this._runModeLogic(now);
+
+    // d) Update Audio params
+    this._updateAudio();
+
+    // e) Read analyser for oscilloscope
+    this.audio.getWaveform(this.waveformBuf);
+
+    // f) Draw
+    this._draw(now);
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Mode Logic
+  // ─────────────────────────────────────────────────
+  _runModeLogic(now) {
+    const inp = this.input;
+
+    // Pot-Button: cycle focus whenever pressed (especially in SETUP mode)
+    if (inp.potBtnPressed) {
+      this.focusIdx = (this.focusIdx + 1) % PARAM_FOCUS.length;
+      if (this.setupZone) {
+        const preset      = this.presets[this.setupZone];
+        const focus       = PARAM_FOCUS[this.focusIdx];
+        this.setupBaseVal = this._presetGetFocus(preset, focus);
+      }
+    }
+
+    // ── SETUP MODE: active only while Button 1 is held ──
+    if (inp.btn1) {
+      if (this.mode !== 'SETUP') {
+        this.mode = 'SETUP';
+        this.setupZone = null;
+      }
+
+      // Detect cardinal zone (r > 0.3, ±45° sector)
+      const r = inp.r, th = inp.theta;
+      let zone = null;
+      if (r > 0.3) {
+        for (const [key, ang] of Object.entries(CARD_ANGLES)) {
+          if (Math.abs(angleDiff(th, ang)) <= Math.PI / 4) {
+            zone = key; break;
+          }
+        }
+      }
+
+      if (zone !== this.setupZone) {
+        // Zone changed – store current value as base
+        if (zone) {
+          this.setupZone    = zone;
+          const preset      = this.presets[zone];
+          const focus       = PARAM_FOCUS[this.focusIdx];
+          this.setupBaseVal = this._presetGetFocus(preset, focus);
+          this.setupDelta   = 0;
+        } else {
+          this.setupZone = null;
+        }
+      }
+
+      // Adjust parameter within zone
+      if (this.setupZone) {
+        const cardAng = CARD_ANGLES[this.setupZone];
+        // Angle within the ±45° sector (normalized -1..1)
+        const diff    = angleDiff(inp.theta, cardAng);
+        const t       = clamp(diff / (Math.PI / 4), -1, 1);  // -1=CCW, +1=CW
+        // Map t: sector-center = stored value, ±1 = ±0.5 range
+        const focus   = PARAM_FOCUS[this.focusIdx];
+        let newVal;
+        if (focus === 'FREQUENCY') {
+          // frequency log range: base ± 2 octaves
+          const octDelta = t * 2;
+          newVal = clamp(this.setupBaseVal * Math.pow(2, octDelta), 20, 2000);
+        } else {
+          newVal = clamp(this.setupBaseVal + t * 0.5, 0, 1);
+        }
+        this._presetSetFocus(this.presets[this.setupZone], focus, newVal);
+      }
+
+    } else {
+      // Button 1 released → commit + return to PLAY (or GESTURE)
+      if (this.mode === 'SETUP') {
+        this.mode = this.gestPlaying ? 'GESTURE' : 'PLAY';
+        this.setupZone = null;
+      }
+    }
+
+    // ── GESTURE MODE / Button 2 logic ──
+    if (!inp.btn1) {  // gesture not active during setup
+      if (inp.btn2Pressed) {
+        // Start recording
+        this.gestRecording = true;
+        this.gestPlaying   = false;
+        this.gestBtn2DownAt = now;
+        this.gestureSlots[this.activeGestSlot].reset();
+        if (this.mode !== 'SETUP') this.mode = 'GESTURE';
+      }
+      if (inp.btn2 && this.gestRecording) {
+        // Record frame
+        this.gestureSlots[this.activeGestSlot].record(inp.joyX, inp.joyY);
+      }
+      if (inp.btn2Released && this.gestRecording) {
+        const held = now - this.gestBtn2DownAt;
+        this.gestRecording = false;
+        const slot = this.gestureSlots[this.activeGestSlot];
+        slot.finalize();
+        if (held < 200 && inp.r < 0.05) {
+          // Quick tap with no motion → cycle slot
+          this.gestPlaying = false;
+          this.activeGestSlot = (this.activeGestSlot + 1) % 4;
+        } else if (slot.has) {
+          // Start playback
+          this.gestPlaying = true;
+        }
+      }
+    }
+
+    // ── PLAY MODE: radial interpolation ──
+    if (this.mode === 'PLAY') {
+      const r  = inp.r;
+      const th = inp.theta;
+
+      // Compute radial blend weights
+      let wTotal = 0;
+      const weights = {};
+      for (const [key, ang] of Object.entries(CARD_ANGLES)) {
+        const w = radialWeight(th, ang);
+        weights[key] = w;
+        wTotal += w;
+      }
+      if (wTotal < 0.001) {
+        // Joystick at center – use equal blend
+        for (const k of Object.keys(weights)) weights[k] = 0.25;
+        wTotal = 1;
+      }
+
+      // Interpolate frequency (log) and 0–1 params
+      let blendFreq = 0, blendHarm = 0, blendTimb = 0, blendMorph = 0;
+      for (const [key, w] of Object.entries(weights)) {
+        const p = this.presets[key];
+        const nw = w / wTotal;
+        blendFreq += Math.log2(p.freq)   * nw;
+        blendHarm += p.harmonics * nw;
+        blendTimb += p.timbre    * nw;
+        blendMorph+= p.morph     * nw;
+      }
+      blendFreq = Math.pow(2, blendFreq);  // back from log
+
+      this._blended = { freq: blendFreq, harmonics: blendHarm, timbre: blendTimb, morph: blendMorph };
+
+      // Dynamic LPG triggering
+      const rNow     = r;
+      const dT       = (now - this.prevRTime) / 1000;
+      const rVel     = dT > 0 ? (rNow - this.prevR) / dT : 0;
+      this.prevR     = rNow;
+      this.prevRTime = now;
+
+      if (rNow > 0.05) {
+        // Gate on
+        if (this.lpgGate === 0) {
+          // Rising edge: set peak/attack from outward velocity
+          const vel = clamp(Math.max(rVel, 0), 0, 5);
+          const pk  = clamp(0.4 + rNow * 0.6, 0.4, 1);
+          const atk = clamp(1 - vel * 0.18, 0.02, 0.9);
+          this.audio.setParamNow('lpg_peak',   pk);
+          this.audio.setParamNow('lpg_attack',  atk);
+        }
+        this.lpgGate = 1;
+      } else {
+        // Gate off – set decay from return velocity (negative rVel = returning)
+        if (this.lpgGate === 1) {
+          const vel     = Math.abs(clamp(rVel, -5, 0));
+          const dec     = clamp(1 - vel * 0.25, 0.02, 0.95);
+          this.audio.setParamNow('lpg_decay', dec);
+        }
+        this.lpgGate = 0;
+      }
+
+      // Amplitude = r distance
+      this.audio.setParam('amplitude', clamp(rNow, 0, 1), 0.05);
+    }
+
+    // ── GESTURE playback joystick override ──
+    if (this.gestPlaying && !inp.btn1) {
+      const slot = this.gestureSlots[this.activeGestSlot];
+      if (inp.r > 0.1) {
+        // Live punch-in: use real joystick (already in inp)
+      } else {
+        // Playback gesture frame into input
+        const frame = slot.next();
+        if (frame) {
+          // Override input joy for parameter update purposes
+          this.input.joyX = frame.x;
+          this.input.joyY = frame.y;
+        }
+      }
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Audio Parameter Update
+  // ─────────────────────────────────────────────────
+  _updateAudio() {
+    if (!this.audio.ready) return;
+    const inp = this.input;
+
+    if (this.mode === 'SETUP' && this.setupZone) {
+      // Play continuous tone using active zone's preset
+      const p = this.presets[this.setupZone];
+      this.audio.setParam('frequency',  p.freq);
+      this.audio.setParam('harmonics',  p.harmonics);
+      this.audio.setParam('timbre',     p.timbre);
+      this.audio.setParam('morph',      p.morph);
+      this.audio.setParamNow('lpg_gate',   1);
+      this.audio.setParamNow('lpg_peak',   0.8);
+      this.audio.setParamNow('lpg_attack', 0.01);
+      this.audio.setParamNow('lpg_decay',  0.8);
+      this.audio.setParam('amplitude', 1);
+    } else {
+      // Play mode / gesture: use blended params
+      if (this._blended) {
+        this.audio.setParam('frequency',  this._blended.freq);
+        this.audio.setParam('harmonics',  this._blended.harmonics);
+        this.audio.setParam('timbre',     this._blended.timbre);
+        this.audio.setParam('morph',      this._blended.morph);
+      }
+      this.audio.setParamNow('lpg_gate', this.lpgGate);
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Preset helpers
+  // ─────────────────────────────────────────────────
+  _presetGetFocus(preset, focus) {
+    switch (focus) {
+      case 'FREQUENCY': return preset.freq;
+      case 'HARMONICS': return preset.harmonics;
+      case 'TIMBRE':    return preset.timbre;
+      case 'MORPH':     return preset.morph;
+    }
+    return 0;
+  }
+  _presetSetFocus(preset, focus, val) {
+    switch (focus) {
+      case 'FREQUENCY': preset.freq      = val; break;
+      case 'HARMONICS': preset.harmonics = val; break;
+      case 'TIMBRE':    preset.timbre    = val; break;
+      case 'MORPH':     preset.morph     = val; break;
+    }
+  }
+
+  // ─────────────────────────────────────────────────
+  //  Drawing
+  // ─────────────────────────────────────────────────
+  _draw(now) {
+    const c = this.ctx2d;
+    c.clearRect(0, 0, W, H);
+
+    // ── Node Card background ──
+    c.save();
+    roundRect(c, 0, 0, W, H, 14);
+    c.fillStyle = '#1a1a2e';
+    c.fill();
+    c.strokeStyle = '#2d2d5e';
+    c.lineWidth   = 1.5;
+    c.stroke();
+    c.restore();
+
+    // ── MCU LED ──
+    this._drawMcuLed(c, now);
+
+    // ── Joystick ──
+    this._drawJoystick(c);
+
+    // ── Oscilloscope ──
+    this._drawOscilloscope(c);
+
+    // ── Buttons & LEDs ──
+    this._drawButtons(c);
+
+    // ── Labels ──
+    this._drawLabels(c);
+  }
+
+  _drawMcuLed(c, now) {
+    const { x, y, r } = MCU_LED;
+
+    let color;
+    if (this.mode === 'SETUP') {
+      // Amber
+      color = '#ffaa00';
+    } else {
+      // Pulse blue/white with VU level
+      // Compute RMS approximation from waveform buffer
+      let rms = 0;
+      for (const v of this.waveformBuf) rms += v * v;
+      rms = Math.sqrt(rms / this.waveformBuf.length);
+      this.mcuVU = this.mcuVU * 0.85 + rms * 0.15;
+      const intensity = clamp(this.mcuVU * 4, 0, 1);
+      // Pulse hue slowly
+      this.mcuHue = (this.mcuHue + 0.3) % 360;
+      const bright = Math.round(lerp(60, 255, intensity));
+      color = `rgb(${Math.round(lerp(60, 200, intensity))},${Math.round(lerp(60, 180, intensity))},${bright})`;
+    }
+
+    // Glow
+    const grad = c.createRadialGradient(x, y, 0, x, y, r * 2.5);
+    grad.addColorStop(0, color);
+    grad.addColorStop(1, 'transparent');
+    c.save();
+    c.globalAlpha = 0.35;
+    c.beginPath();
+    c.arc(x, y, r * 2.5, 0, TWO_PI);
+    c.fillStyle = grad;
+    c.fill();
+    c.restore();
+
+    c.beginPath();
+    c.arc(x, y, r, 0, TWO_PI);
+    c.fillStyle = color;
+    c.fill();
+  }
+
+  _drawJoystick(c) {
+    const cx = JOY_CX, cy = JOY_CY, R = JOY_R;
+
+    // Boundary circle
+    c.save();
+    c.beginPath();
+    c.arc(cx, cy, R, 0, TWO_PI);
+    c.strokeStyle = '#2d2d5e';
+    c.lineWidth   = 1;
+    c.stroke();
+
+    // Subtle fill
+    c.globalAlpha = 0.15;
+    c.fillStyle   = '#3333aa';
+    c.fill();
+    c.restore();
+
+    // Cardinal zone highlight in setup mode
+    if (this.mode === 'SETUP' && this.setupZone) {
+      const ang = CARD_ANGLES[this.setupZone];
+      c.save();
+      c.beginPath();
+      c.moveTo(cx, cy);
+      c.arc(cx, cy, R - 2, ang - Math.PI / 4, ang + Math.PI / 4);
+      c.closePath();
+      c.fillStyle   = '#ffaa0020';
+      c.fill();
+      c.strokeStyle = '#ffaa0040';
+      c.lineWidth   = 1;
+      c.stroke();
+      c.restore();
+    }
+
+    // Cardinal markers (tiny diamonds)
+    const DM = 4;  // half-size of diamond
+    for (const [key, pos] of Object.entries(CARD_MARKERS)) {
+      const { x, y } = pos;
+      const active = (this.mode === 'SETUP' && this.setupZone === key);
+      c.save();
+      c.beginPath();
+      c.moveTo(x,    y - DM);
+      c.lineTo(x + DM, y);
+      c.lineTo(x,    y + DM);
+      c.lineTo(x - DM, y);
+      c.closePath();
+      c.fillStyle = active ? '#ffaa00' : '#44446a';
+      c.fill();
+      c.restore();
+    }
+
+    // Cross-hair lines
+    c.save();
+    c.strokeStyle = '#2d2d5e';
+    c.lineWidth   = 0.5;
+    c.setLineDash([2, 3]);
+    c.beginPath();
+    c.moveTo(cx - R + 5, cy); c.lineTo(cx + R - 5, cy);
+    c.moveTo(cx, cy - R + 5); c.lineTo(cx, cy + R - 5);
+    c.stroke();
+    c.setLineDash([]);
+    c.restore();
+
+    // Puck position
+    const inp = this.input;
+    const puckX = cx + inp.joyX * (R - PUCK_R);
+    const puckY = cy + inp.joyY * (R - PUCK_R);
+
+    // Puck glow
+    const grad = c.createRadialGradient(puckX, puckY, 0, puckX, puckY, PUCK_R * 2);
+    grad.addColorStop(0, '#7b68ee88');
+    grad.addColorStop(1, 'transparent');
+    c.save();
+    c.beginPath();
+    c.arc(puckX, puckY, PUCK_R * 2, 0, TWO_PI);
+    c.fillStyle = grad;
+    c.fill();
+    c.restore();
+
+    // Puck circle
+    c.beginPath();
+    c.arc(puckX, puckY, PUCK_R, 0, TWO_PI);
+    const puckGrad = c.createRadialGradient(puckX - 3, puckY - 3, 0, puckX, puckY, PUCK_R);
+    puckGrad.addColorStop(0, '#9988ff');
+    puckGrad.addColorStop(1, '#5544bb');
+    c.fillStyle = puckGrad;
+    c.fill();
+    c.strokeStyle = '#aa99ff';
+    c.lineWidth   = 1;
+    c.stroke();
+  }
+
+  _drawOscilloscope(c) {
+    const cx = OSC_CX, cy = OSC_CY, R = OSC_R;
+    const buf = this.waveformBuf;
+    const N   = buf.length;
+
+    // Dark background circle
+    c.save();
+    c.beginPath();
+    c.arc(cx, cy, R, 0, TWO_PI);
+    c.fillStyle = '#0d0d20';
+    c.fill();
+    c.strokeStyle = '#2d2d5e';
+    c.lineWidth   = 1;
+    c.stroke();
+
+    // Waveform ring: draw samples along circumference
+    // We sample a window of the buffer and offset radially
+    const DISPLAY = Math.min(N, 128);
+    const waveAmp = R * 0.35;   // max deviation from ring radius
+    const ringR   = R * 0.6;    // baseline ring radius
+
+    c.beginPath();
+    for (let i = 0; i < DISPLAY; i++) {
+      const angle = (i / DISPLAY) * TWO_PI - Math.PI / 2;
+      const sample = buf[i];
+      const r = ringR + sample * waveAmp;
+      const px = cx + Math.cos(angle) * r;
+      const py = cy + Math.sin(angle) * r;
+      if (i === 0) c.moveTo(px, py);
+      else         c.lineTo(px, py);
+    }
+    c.closePath();
+    c.strokeStyle = '#00ff88';
+    c.lineWidth   = 1.2;
+    c.shadowBlur  = 5;
+    c.shadowColor = '#00ff88';
+    c.stroke();
+    c.shadowBlur  = 0;
+    c.restore();
+  }
+
+  _drawButtons(c) {
+    const inp = this.input;
+
+    // ── Button 0 (Pot-Button, key 0) ──
+    const btn0Pressed = inp.potBtn;
+    const focusName   = PARAM_FOCUS[this.focusIdx];
+    const focusColor  = FOCUS_COLORS[focusName];
+
+    c.save();
+    roundRect(c, BTN0.x, BTN0.y, BTN0.w, BTN0.h, BTN0.r);
+    c.fillStyle   = btn0Pressed ? '#4a4a8e' : '#2d2d5e';
+    c.fill();
+    c.strokeStyle = btn0Pressed ? '#7b68ee' : '#44446a';
+    c.lineWidth   = 1;
+    c.stroke();
+    c.fillStyle   = btn0Pressed ? '#ffffff' : '#8888aa';
+    c.font        = '7px monospace';
+    c.textAlign   = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('POT', BTN0.x + BTN0.w / 2, BTN0.y + BTN0.h / 2);
+    c.restore();
+
+    // Constant parameter name under POT button
+    c.save();
+    c.fillStyle    = focusColor;
+    c.font         = '6px monospace';
+    c.textAlign    = 'center';
+    c.textBaseline = 'top';
+    // Display abbreviation: FREQ, HARM, TIMB, MORP
+    c.fillText(focusName.substring(0, 4), BTN0.x + BTN0.w / 2, BTN0.y + BTN0.h + 2);
+    c.restore();
+
+    // ── LED 1 ──
+    let led1Color;
+    if (this.mode === 'SETUP') {
+      led1Color = FOCUS_COLORS[PARAM_FOCUS[this.focusIdx]];
+    } else {
+      led1Color = '#333355';  // dim
+    }
+    this._drawLed(c, LED1.x, LED1.y, LED1.r, led1Color);
+
+    // ── Button 1 ──
+    const btn1Pressed = inp.btn1;
+    c.save();
+    roundRect(c, BTN1.x, BTN1.y, BTN1.w, BTN1.h, BTN1.r);
+    c.fillStyle   = btn1Pressed ? '#4a4a8e' : '#2d2d5e';
+    c.fill();
+    c.strokeStyle = btn1Pressed ? '#7b68ee' : '#44446a';
+    c.lineWidth   = 1;
+    c.stroke();
+    // Label
+    c.fillStyle  = '#8888aa';
+    c.font       = '7px monospace';
+    c.textAlign  = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('BTN1', BTN1.x + BTN1.w / 2, BTN1.y + BTN1.h / 2);
+    c.restore();
+
+    // ── LED 2 ──
+    let led2Color;
+    if (this.gestRecording) {
+      led2Color = '#ff3333';   // Recording = Red
+    } else if (this.gestPlaying && !this.gestRecording) {
+      // Green if playing cleanly, Red if live punch-in
+      if (inp.r > 0.1 && this.gestPlaying) {
+        led2Color = '#ff3333'; // punch-in
+      } else if (this.gestPlaying) {
+        led2Color = '#33ff66'; // playback
+      } else {
+        led2Color = '#333355';
+      }
+    } else {
+      // Slot color
+      const SLOT_COLORS = ['#ffffff', '#ff4444', '#44ff44', '#4466ff'];
+      led2Color = (this.gestPlaying || this.gestRecording)
+        ? SLOT_COLORS[this.activeGestSlot]
+        : '#333355';
+    }
+    this._drawLed(c, LED2.x, LED2.y, LED2.r, led2Color);
+
+    // ── Button 2 ──
+    const btn2Pressed = inp.btn2;
+    c.save();
+    roundRect(c, BTN2.x, BTN2.y, BTN2.w, BTN2.h, BTN2.r);
+    c.fillStyle   = btn2Pressed ? '#4a4a8e' : '#2d2d5e';
+    c.fill();
+    c.strokeStyle = btn2Pressed ? '#7b68ee' : '#44446a';
+    c.lineWidth   = 1;
+    c.stroke();
+    c.fillStyle   = '#8888aa';
+    c.font        = '7px monospace';
+    c.textAlign   = 'center';
+    c.textBaseline = 'middle';
+    c.fillText('BTN2', BTN2.x + BTN2.w / 2, BTN2.y + BTN2.h / 2);
+    c.restore();
+  }
+
+  _drawLed(c, x, y, r, color) {
+    // Glow
+    if (color !== '#333355') {
+      const grad = c.createRadialGradient(x, y, 0, x, y, r * 3);
+      grad.addColorStop(0, color + 'aa');
+      grad.addColorStop(1, 'transparent');
+      c.save();
+      c.beginPath();
+      c.arc(x, y, r * 3, 0, TWO_PI);
+      c.fillStyle = grad;
+      c.fill();
+      c.restore();
+    }
+    c.beginPath();
+    c.arc(x, y, r, 0, TWO_PI);
+    c.fillStyle = color;
+    c.fill();
+  }
+
+  _drawLabels(c) {
+    c.save();
+    c.fillStyle    = '#44446a';
+    c.font         = '6px monospace';
+    c.textAlign    = 'center';
+    c.textBaseline = 'top';
+
+    // Mode label under MCU LED
+    const modeStr = this.mode === 'SETUP' ? 'SETUP' : (this.gestPlaying || this.gestRecording ? 'GEST' : 'PLAY');
+    c.fillText(modeStr, MCU_LED.x, MCU_LED.y + MCU_LED.r + 3);
+
+    // Joystick label
+    c.fillText('JOY', JOY_CX, JOY_CY + JOY_R + 5);
+
+    // Oscilloscope label
+    c.fillText('OSC', OSC_CX, OSC_CY + OSC_R + 5);
+
+    // Gesture slot indicator
+    if (this.gestPlaying || this.gestRecording) {
+      c.fillStyle = '#8888aa';
+      c.fillText(`S${this.activeGestSlot + 1}`, LED2.x, LED2.y + LED2.r + 3);
+    }
+
+    // Focus param in setup (also reflected under LED1)
+    if (this.mode === 'SETUP') {
+      const focus = PARAM_FOCUS[this.focusIdx];
+      c.fillStyle = FOCUS_COLORS[focus];
+      c.font = '6px monospace';
+      c.fillText(focus.substring(0, 4), LED1.x, LED1.y + LED1.r + 3);
+    }
+
+    c.restore();
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════
+//  Bootstrap  –  wire up click-to-start overlay
+// ═══════════════════════════════════════════════════════════════════
+(function bootstrap() {
+  const canvas  = document.getElementById('c');
+  const overlay = document.getElementById('start-overlay');
+  const app     = new JoySpeak(canvas);
+
+  overlay.addEventListener('click', async () => {
+    overlay.style.display = 'none';
+    try {
+      await app.start();
+    } catch (err) {
+      console.error('JoySpeak audio init failed:', err);
+      overlay.style.display = 'flex';
+      overlay.querySelector('span').textContent = 'Audio Error — check console';
+    }
+  });
+
+  // Gamepad connection events
+  window.addEventListener('gamepadconnected', (e) => {
+    console.log(`JoySpeak: gamepad connected — ${e.gamepad.id}`);
+  });
+  window.addEventListener('gamepaddisconnected', (e) => {
+    console.log(`JoySpeak: gamepad disconnected — ${e.gamepad.id}`);
+  });
+})();
+</script>
+</body>
+</html>

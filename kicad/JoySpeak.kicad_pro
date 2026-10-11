@@ -76,12 +76,7 @@
           "width": 0.0
         }
       ],
-      "drc_exclusions": [
-        [
-          "invalid_outline|82969000|23006000|fdceba8f-91d6-4897-9b86-829b31e1bb20|5a61f79e-b374-45bb-b451-59a8b782dfa5",
-          ""
-        ]
-      ],
+      "drc_exclusions": [],
       "meta": {
         "version": 2
       },

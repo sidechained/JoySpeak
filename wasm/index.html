@@ -1,0 +1,998 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>JoySpeak Virtual Simulator</title>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;800&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg-color: #0b0914;
+            --card-bg: rgba(22, 19, 38, 0.7);
+            --pcb-bg: #1e1330;
+            --pcb-silk: #ffd700;
+            --accent-neon: #a020f0;
+            --text-color: #f1f0fb;
+            --text-muted: #8e8aab;
+            
+            --glow-green: #39ff14;
+            --glow-red: #ff3131;
+            --glow-blue: #00f0ff;
+            --glow-purple: #bd00ff;
+            
+            --shadow-neon: 0 0 15px var(--accent-neon);
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-color);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(120, 50, 190, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(0, 240, 255, 0.1) 0px, transparent 50%);
+            color: var(--text-color);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            overflow-x: hidden;
+        }
+
+        header {
+            width: 100%;
+            max-width: 1200px;
+            padding: 2rem 1.5rem 1rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+
+        header h1 {
+            font-weight: 800;
+            font-size: 2rem;
+            letter-spacing: -0.5px;
+            background: linear-gradient(45deg, #bd00ff, #00f0ff);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .audio-btn {
+            background: linear-gradient(135deg, #8a2be2, #4b0082);
+            color: white;
+            border: none;
+            padding: 0.75rem 1.5rem;
+            font-size: 1rem;
+            font-weight: 600;
+            border-radius: 50px;
+            cursor: pointer;
+            box-shadow: 0 4px 15px rgba(138, 43, 226, 0.4);
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .audio-btn:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(138, 43, 226, 0.6);
+        }
+
+        .audio-btn:disabled {
+            background: #2b283b;
+            color: #5d5a71;
+            cursor: not-allowed;
+            box-shadow: none;
+        }
+
+        .audio-btn.active {
+            background: linear-gradient(135deg, #00c6ff, #0072ff);
+            box-shadow: 0 4px 15px rgba(0, 114, 255, 0.4);
+        }
+
+        main {
+            width: 100%;
+            max-width: 1200px;
+            padding: 1.5rem;
+            display: grid;
+            grid-template-columns: 1.2fr 1fr;
+            gap: 2rem;
+            flex-grow: 1;
+        }
+
+        @media (max-width: 900px) {
+            main {
+                grid-template-columns: 1fr;
+            }
+        }
+
+        .card {
+            background: var(--card-bg);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 1.5rem;
+            backdrop-filter: blur(10px);
+            display: flex;
+            flex-direction: column;
+            gap: 1.5rem;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+        }
+
+        /* PCB Layout Styling */
+        .pcb-container {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        .pcb {
+            width: 380px;
+            height: 380px;
+            background-color: var(--pcb-bg);
+            border: 6px solid #160d24;
+            border-radius: 35px;
+            position: relative;
+            box-shadow: 
+                inset 0 0 20px rgba(0,0,0,0.8),
+                0 15px 40px rgba(0,0,0,0.6);
+            overflow: hidden;
+        }
+
+        /* Silk screen style lines */
+        .pcb::after {
+            content: '';
+            position: absolute;
+            top: 15px; bottom: 15px; left: 15px; right: 15px;
+            border: 1px dashed rgba(255, 215, 0, 0.15);
+            border-radius: 25px;
+            pointer-events: none;
+        }
+
+        .pcb-label {
+            position: absolute;
+            color: rgba(255, 215, 0, 0.4);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            pointer-events: none;
+            letter-spacing: 1px;
+        }
+
+        .label-joyspeak {
+            bottom: 25px;
+            left: 30px;
+            font-size: 13px;
+            font-weight: bold;
+        }
+
+        /* Control Stack Layout on the right */
+        .control-stack {
+            position: absolute;
+            right: 50px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+            width: 90px;
+        }
+
+        #stack-recmode {
+            top: 50px;
+        }
+
+        #stack-trigger {
+            bottom: 50px;
+        }
+
+        /* Physical Joystick styling */
+        .joystick-housing {
+            width: 140px;
+            height: 140px;
+            background: radial-gradient(circle, #222 40%, #000 100%);
+            border: 4px solid #333;
+            border-radius: 50%;
+            position: absolute;
+            top: 120px;
+            left: 45px;
+            box-shadow: 
+                inset 0 10px 20px rgba(0,0,0,0.9),
+                0 4px 10px rgba(0,0,0,0.5);
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            touch-action: none;
+        }
+
+        .joystick-stick {
+            width: 60px;
+            height: 60px;
+            background: radial-gradient(circle, #444 0%, #151515 80%, #000 100%);
+            border: 2px solid #222;
+            border-radius: 50%;
+            box-shadow: 
+                0 8px 16px rgba(0,0,0,0.8),
+                0 0 10px rgba(138, 43, 226, 0.2);
+            transition: transform 0.05s ease-out;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            position: relative;
+        }
+
+        .joystick-stick::after {
+            content: '';
+            width: 25px;
+            height: 25px;
+            background: radial-gradient(circle, #666 0%, #222 100%);
+            border-radius: 50%;
+            opacity: 0.7;
+        }
+
+        /* LED styling */
+        .led-group {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+        }
+
+        .led-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 8px;
+            color: rgba(255, 215, 0, 0.35);
+            text-transform: uppercase;
+        }
+
+        .led {
+            width: 14px;
+            height: 14px;
+            border-radius: 50%;
+            background-color: #222;
+            border: 2px solid #444;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.8);
+            transition: all 0.2s ease;
+        }
+
+        /* Active glowing states for LEDs */
+        .led.glow-green {
+            background-color: #55ff33;
+            border-color: #aaff99;
+            box-shadow: 0 0 15px #39ff14, inset 0 1px 3px white;
+        }
+
+        .led.glow-red {
+            background-color: #ff3333;
+            border-color: #ff9999;
+            box-shadow: 0 0 15px #ff3131, inset 0 1px 3px white;
+        }
+
+        .led.glow-blue {
+            background-color: #33d9ff;
+            border-color: #99f0ff;
+            box-shadow: 0 0 15px #00f0ff, inset 0 1px 3px white;
+        }
+
+        .led.glow-purple {
+            background-color: #bd00ff;
+            border-color: #e599ff;
+            box-shadow: 0 0 15px #bd00ff, inset 0 1px 3px white;
+        }
+
+        /* Push Buttons */
+        .btn-wrapper {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 2px;
+            cursor: pointer;
+        }
+
+        .btn-phys {
+            width: 24px;
+            height: 24px;
+            border: 2px solid #333;
+            border-radius: 4px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.6);
+            transition: transform 0.1s ease, box-shadow 0.1s ease;
+        }
+
+        .btn-phys:active {
+            transform: scale(0.9);
+            box-shadow: 0 0px 2px rgba(0,0,0,0.8);
+        }
+
+        #btn-mode {
+            background: radial-gradient(circle, #444 20%, #111 100%);
+        }
+        #btn-mode:active {
+            background: #222;
+        }
+
+        #btn-trigger {
+            background: radial-gradient(circle, #00f0ff 20%, #005f77 100%);
+        }
+        #btn-trigger:active {
+            background: #008fa8;
+        }
+
+        /* Display Panel Info */
+        .status-display {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 1rem;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 1rem;
+            border-radius: 12px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.85rem;
+        }
+
+        .status-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .status-item label {
+            color: var(--text-muted);
+            font-size: 0.75rem;
+            text-transform: uppercase;
+        }
+
+        .status-item span {
+            font-weight: bold;
+            color: #00f0ff;
+        }
+
+        /* Visualizers */
+        .visualizer-container {
+            display: flex;
+            flex-direction: column;
+            gap: 1rem;
+        }
+
+        .vis-label {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        canvas {
+            width: 100%;
+            height: 120px;
+            background: #05040a;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            display: block;
+        }
+
+        /* Console/Instructions Styling */
+        .console {
+            background: rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.05);
+            border-radius: 12px;
+            padding: 1rem;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.8rem;
+            color: var(--text-muted);
+            overflow-y: auto;
+            max-height: 160px;
+        }
+
+        .console-line {
+            margin-bottom: 4px;
+        }
+        
+        .console-line.info { color: #8e8aab; }
+        .console-line.success { color: var(--glow-green); }
+        .console-line.warn { color: #ff3131; }
+        .console-line.action { color: var(--glow-blue); }
+
+        .btn-group {
+            display: flex;
+            gap: 10px;
+        }
+
+        .side-btn {
+            flex: 1;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: var(--text-color);
+            padding: 0.5rem;
+            border-radius: 8px;
+            cursor: pointer;
+            font-family: 'Outfit', sans-serif;
+            font-size: 0.85rem;
+            font-weight: 600;
+            transition: all 0.2s ease;
+        }
+
+        .side-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+
+        .side-btn:active {
+            transform: scale(0.98);
+        }
+
+        /* Help Overlay */
+        .instructions-list {
+            font-size: 0.85rem;
+            color: var(--text-muted);
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            padding-left: 1rem;
+        }
+
+        .instructions-list li span {
+            color: var(--text-color);
+            font-weight: 600;
+        }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>JoySpeak.sim</h1>
+        <button id="audio-start-btn" class="audio-btn" disabled>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M11 5L6 9H2v6h4l5 4V5z"></path><path d="M15.54 8.46a5 5 0 0 1 0 7.07M19.07 4.93a10 10 0 0 1 0 14.14"></path></svg>
+            Loading WebAssembly...
+        </button>
+    </header>
+
+    <main>
+        <!-- Card 1: PCB & Direct Controls -->
+        <div class="card">
+            <h2>Hardware Simulator</h2>
+            
+            <div class="pcb-container">
+                <div class="pcb">
+                    <!-- Silk Typography Decoration instead of RP2040 -->
+                    <div class="pcb-label" style="top: 155px; left: 50%; transform: translateX(-50%); font-size: 15px; font-weight: 800; text-align: center; width: 100%; color: rgba(255, 215, 0, 0.25);">
+                        JOYSPEAK<br>
+                        <span style="font-size: 8px; font-family: 'JetBrains Mono', monospace; font-weight: normal; opacity: 0.8; letter-spacing: 2px;">WASM ENGINE</span>
+                    </div>
+
+                    <!-- Labels -->
+                    <div class="pcb-label label-joyspeak">JOYSPEAK v1.0</div>
+
+                    <!-- Joystick (Left side) -->
+                    <div class="joystick-housing" id="joystick-housing">
+                        <div class="joystick-stick" id="joystick-stick"></div>
+                    </div>
+
+                    <!-- Stack 1 (Rec Mode + LED1) - Right Side Top -->
+                    <div class="control-stack" id="stack-recmode">
+                        <div class="led-group">
+                            <div class="led" id="led-1-light"></div>
+                            <span class="led-label">LED1 (MODE)</span>
+                        </div>
+                        <div class="btn-wrapper">
+                            <div class="btn-phys" id="btn-mode"></div>
+                            <span class="led-label">BTN1 (REC)</span>
+                        </div>
+                    </div>
+
+                    <!-- Stack 2 (Trigger + LED2) - Right Side Bottom -->
+                    <div class="control-stack" id="stack-trigger">
+                        <div class="led-group">
+                            <div class="led" id="led-2-light"></div>
+                            <span class="led-label">LED2 (STAT)</span>
+                        </div>
+                        <div class="btn-wrapper">
+                            <div class="btn-phys" id="btn-trigger"></div>
+                            <span class="led-label">BTN2 (TRIG)</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="btn-group">
+                <button class="side-btn" id="btn-js-click">Press Joystick Button</button>
+                <button class="side-btn" id="btn-js-long">Long Press Joystick (Clear)</button>
+            </div>
+
+            <div class="status-display">
+                <div class="status-item">
+                    <label>FSM State</label>
+                    <span id="txt-state">IDLE</span>
+                </div>
+                <div class="status-item">
+                    <label>FSM Mode</label>
+                    <span id="txt-mode">ONE-SHOT</span>
+                </div>
+                <div class="status-item">
+                    <label>Synth Model</label>
+                    <span id="txt-model">FM SYNTHESIS</span>
+                </div>
+                <div class="status-item">
+                    <label>Recorded Path</label>
+                    <span id="txt-buffer">0 / 512 samples</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Card 2: Visualizers and Logs -->
+        <div class="card">
+            <h2>Visualizer & Analysis</h2>
+
+            <div class="visualizer-container">
+                <div>
+                    <div class="vis-label">
+                        <span>Oscilloscope (Synth Audio)</span>
+                        <span id="txt-freq" style="color:var(--glow-blue)">- Hz</span>
+                    </div>
+                    <canvas id="canvas-oscilloscope"></canvas>
+                </div>
+
+                <div>
+                    <div class="vis-label">
+                        <span>Recorded X/Y Envelope</span>
+                        <span style="color:var(--text-muted)">X=Red, Y=Blue</span>
+                    </div>
+                    <canvas id="canvas-envelope"></canvas>
+                </div>
+            </div>
+
+            <h2>Terminal Logs</h2>
+            <div class="console" id="terminal-console">
+                <div class="console-line info">Waiting for WebAssembly engine to load...</div>
+            </div>
+
+            <h2>How to play</h2>
+            <ul class="instructions-list">
+                <li><span>Drag Joystick:</span> Start recording movements automatically (LED1 flashes Red). Release to stop.</li>
+                <li><span>Button 2 (Trigger):</span> Plays back the recorded envelope (modulates the synthesizer!).</li>
+                <li><span>Button 1 (Rec Mode):</span> Cycles playback behavior: **One-Shot** (Green LED1), **Looping** (Blue LED1), **Overdub** (Cyan LED1).</li>
+                <li><span>Joystick Button:</span> Cycles through 3 Synthesizer models: **FM**, **Subtractive (Filter Sweep)**, and **Wavefolder**.</li>
+            </ul>
+        </div>
+    </main>
+
+    <script>
+        // --- UI variables ---
+        const audioStartBtn = document.getElementById('audio-start-btn');
+        const stick = document.getElementById('joystick-stick');
+        const housing = document.getElementById('joystick-housing');
+        const btnMode = document.getElementById('btn-mode');
+        const btnTrigger = document.getElementById('btn-trigger');
+        const btnJsClick = document.getElementById('btn-js-click');
+        const btnJsLong = document.getElementById('btn-js-long');
+        
+        const led1Light = document.getElementById('led-1-light');
+        const led2Light = document.getElementById('led-2-light');
+        
+        const txtState = document.getElementById('txt-state');
+        const txtMode = document.getElementById('txt-mode');
+        const txtModel = document.getElementById('txt-model');
+        const txtBuffer = document.getElementById('txt-buffer');
+        
+        const consoleEl = document.getElementById('terminal-console');
+        
+        const canvasOsc = document.getElementById('canvas-oscilloscope');
+        const canvasEnv = document.getElementById('canvas-envelope');
+        const ctxOsc = canvasOsc.getContext('2d');
+        const ctxEnv = canvasEnv.getContext('2d');
+
+        // --- Joystick State ---
+        let rawX = 0.0;
+        let rawY = 0.0;
+        let isDragging = false;
+        const maxLimit = 50; // Max drag distance from center in px
+
+        // --- Audio Variables ---
+        let audioCtx = null;
+        let scriptNode = null;
+        let analyserNode = null;
+        let wasmAudioBufferPtr = null;
+        let isWasmLoaded = false;
+        
+        // --- Log helper ---
+        function log(message, type = 'info') {
+            const line = document.createElement('div');
+            line.className = `console-line ${type}`;
+            line.innerText = `[${new Date().toLocaleTimeString()}] ${message}`;
+            consoleEl.appendChild(line);
+            consoleEl.scrollTop = consoleEl.scrollHeight;
+        }
+
+        // Global Error Redirector for debugging
+        window.addEventListener('error', function(e) {
+            log(`JS Error: ${e.message} at ${e.filename || 'script'}:${e.lineno || 0}`, 'warn');
+        });
+
+        // --- WebAssembly Module Integration ---
+        let wasmInitSimulation;
+        let wasmPressButton1;
+        let wasmPressButton2;
+        let wasmPressJoystickButton;
+        let wasmTickFSM;
+        let wasmGenerateAudio;
+        let wasmGetFSMState;
+        let wasmGetFSMMode;
+        let wasmGetSynthModel;
+        let wasmGetRecordLength;
+        let wasmGetPlayIndex;
+        let wasmGetBufferSampleX;
+        let wasmGetBufferSampleY;
+        let wasmGetMaxBufferSize;
+
+        window.Module = {
+            onRuntimeInitialized: function() {
+                try {
+                    log("WebAssembly Core engine loaded successfully!", "success");
+                    
+                    // Bind exports
+                    wasmInitSimulation = Module.cwrap('initSimulation', 'void', ['number']);
+                    wasmPressButton1 = Module.cwrap('pressButton1', 'void', []);
+                    wasmPressButton2 = Module.cwrap('pressButton2', 'void', []);
+                    wasmPressJoystickButton = Module.cwrap('pressJoystickButton', 'void', ['number']);
+                    wasmTickFSM = Module.cwrap('tickFSM', 'void', ['number', 'number']);
+                    wasmGenerateAudio = Module.cwrap('generateAudio', 'void', ['number', 'number']);
+                    wasmGetFSMState = Module.cwrap('getFSMState', 'number', []);
+                    wasmGetFSMMode = Module.cwrap('getFSMMode', 'number', []);
+                    wasmGetSynthModel = Module.cwrap('getSynthModel', 'number', []);
+                    wasmGetRecordLength = Module.cwrap('getRecordLength', 'number', []);
+                    wasmGetPlayIndex = Module.cwrap('getPlayIndex', 'number', []);
+                    wasmGetBufferSampleX = Module.cwrap('getBufferSampleX', 'number', ['number']);
+                    wasmGetBufferSampleY = Module.cwrap('getBufferSampleY', 'number', ['number']);
+                    wasmGetMaxBufferSize = Module.cwrap('getMaxBufferSize', 'number', []);
+
+                    isWasmLoaded = true;
+                    
+                    // Enable start button
+                    audioStartBtn.disabled = false;
+                    audioStartBtn.innerText = "Start Audio Engine";
+                    log("WASM system ready. Click [Start Audio Engine] above.", "success");
+                    
+                    // Setup 128Hz polling loop for FSM ticks
+                    setInterval(pollFSM, 1000 / 128);
+                } catch (e) {
+                    log(`Failed to bind WASM exports: ${e.message}`, 'warn');
+                }
+            }
+        };
+
+        // --- FSM Polling ---
+        let lastState = -1;
+        let lastMode = -1;
+        let lastModel = -1;
+
+        const STATE_NAMES = ["IDLE", "RECORDING", "PLAYBACK", "OVERDUB"];
+        const MODE_NAMES = ["ONE-SHOT", "LOOPING", "OVERDUB"];
+        const MODEL_NAMES = ["FM SYNTHESIS", "SUBTRACTIVE (FILTER)", "WAVEFOLDER"];
+
+        function pollFSM() {
+            if (!isWasmLoaded) return;
+            
+            // Run the FSM tick inside WASM
+            wasmTickFSM(rawX, rawY);
+            
+            // Query variables
+            const state = wasmGetFSMState();
+            const mode = wasmGetFSMMode();
+            const model = wasmGetSynthModel();
+            const recLen = wasmGetRecordLength();
+            const playIdx = wasmGetPlayIndex();
+            
+            // Update labels if changed
+            if (state !== lastState) {
+                txtState.innerText = STATE_NAMES[state];
+                log(`State changed to: ${STATE_NAMES[state]}`, "action");
+                lastState = state;
+            }
+            if (mode !== lastMode) {
+                txtMode.innerText = MODE_NAMES[mode];
+                log(`Mode changed to: ${MODE_NAMES[mode]}`, "info");
+                lastMode = mode;
+            }
+            if (model !== lastModel) {
+                txtModel.innerText = MODEL_NAMES[model];
+                log(`Synth model changed to: ${MODEL_NAMES[model]}`, "success");
+                lastModel = model;
+            }
+            
+            txtBuffer.innerText = `${recLen} / 512 samples` + 
+                (state === 2 || state === 3 ? ` (Play: ${playIdx})` : '');
+
+            // LED Feedback System
+            // LED 1: Mode indicator
+            led1Light.className = "led"; // reset
+            if (state === 1) { // Recording -> Flash Red
+                if (Math.floor(Date.now() / 150) % 2 === 0) {
+                    led1Light.classList.add("glow-red");
+                }
+            } else {
+                // Mode-based solid color
+                if (mode === 0) led1Light.classList.add("glow-green");  // One-shot
+                if (mode === 1) led1Light.classList.add("glow-blue");   // Looping
+                if (mode === 2) led1Light.classList.add("glow-purple"); // Overdub
+            }
+
+            // LED 2: Playback / Trigger indicator
+            led2Light.className = "led"; // reset
+            if (state === 2 || state === 3) {
+                led2Light.classList.add("glow-blue");
+            }
+        }
+
+        // --- Web Audio API Initialization ---
+        function startAudio() {
+            if (audioCtx) return;
+            
+            try {
+                // Initialize Web Audio Context
+                audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // CRITICAL: Explicitly trigger resume in the click listener stack
+                audioCtx.resume();
+                
+                // Initialize C++ Simulation
+                wasmInitSimulation(audioCtx.sampleRate);
+                log(`Audio context initialized at ${audioCtx.sampleRate}Hz.`, "info");
+                
+                // Allocate float buffer inside WASM memory for generating audio blocks
+                const bufferSize = 1024;
+                const bytesPerSample = 4;
+                wasmAudioBufferPtr = Module._malloc(bufferSize * bytesPerSample);
+                
+                // ScriptProcessorNode: 1 Input (standard requirement for Safari/FF), 2 Outputs (Stereo)
+                scriptNode = audioCtx.createScriptProcessor(bufferSize, 1, 2);
+                scriptNode.onaudioprocess = function(audioProcessingEvent) {
+                    if (!isWasmLoaded) return;
+                    
+                    const outputBuffer = audioProcessingEvent.outputBuffer;
+                    const channelDataL = outputBuffer.getChannelData(0);
+                    const channelDataR = outputBuffer.getChannelData(1);
+                    
+                    // Generate audio frames into WASM memory
+                    wasmGenerateAudio(wasmAudioBufferPtr, bufferSize);
+                    
+                    // Copy generated frames to stereo output buffers
+                    const wasmHeap = new Float32Array(Module.HEAPF32.buffer, wasmAudioBufferPtr, bufferSize);
+                    for (let i = 0; i < bufferSize; i++) {
+                        const s = wasmHeap[i];
+                        channelDataL[i] = s;
+                        channelDataR[i] = s;
+                    }
+                };
+
+                // Analyzer node for visualizer
+                analyserNode = audioCtx.createAnalyser();
+                analyserNode.fftSize = 512;
+                
+                // Routing: ScriptProcessor -> Analyser -> Output
+                scriptNode.connect(analyserNode);
+                analyserNode.connect(audioCtx.destination);
+                
+                audioStartBtn.innerText = "Audio Running";
+                audioStartBtn.classList.add('active');
+                log("Synthesizer audio thread started successfully.", "success");
+                
+                // Start Visualizer Loops
+                drawOscilloscope();
+                drawEnvelope();
+            } catch (e) {
+                log(`Failed to start Audio Context: ${e.message}`, 'warn');
+            }
+        }
+
+        audioStartBtn.addEventListener('click', () => {
+            if (!audioCtx) {
+                startAudio();
+            } else if (audioCtx.state === 'suspended') {
+                audioCtx.resume().then(() => {
+                    log("Audio Context resumed.", "info");
+                });
+            }
+        });
+
+        // --- Hardware Buttons Interactions ---
+        btnMode.addEventListener('click', () => {
+            if (isWasmLoaded) wasmPressButton1();
+        });
+        
+        btnTrigger.addEventListener('click', () => {
+            if (isWasmLoaded) wasmPressButton2();
+        });
+
+        btnJsClick.addEventListener('click', () => {
+            if (isWasmLoaded) {
+                wasmPressJoystickButton(0); // Short click
+            }
+        });
+
+        btnJsLong.addEventListener('click', () => {
+            if (isWasmLoaded) {
+                wasmPressJoystickButton(1); // Long click (Reset)
+                log("Buffer cleared via Joystick long press.", "warn");
+            }
+        });
+
+        // --- Joystick Dragging (Spring Loaded) ---
+        function setJoystickStickPos(x, y) {
+            stick.style.transform = `translate(${x}px, ${y}px)`;
+            
+            // Map pixel range (-maxLimit to maxLimit) to float range (-1.0 to 1.0)
+            rawX = x / maxLimit;
+            // Invert Y coordinate so dragging up corresponds to positive 1.0
+            rawY = -y / maxLimit;
+        }
+
+        function onPointerDown(e) {
+            isDragging = true;
+            onPointerMove(e);
+            window.addEventListener('pointermove', onPointerMove);
+            window.addEventListener('pointerup', onPointerUp);
+        }
+
+        function onPointerMove(e) {
+            if (!isDragging) return;
+            
+            const rect = housing.getBoundingClientRect();
+            const centerX = rect.left + rect.width / 2;
+            const centerY = rect.top + rect.height / 2;
+            
+            let deltaX = e.clientX - centerX;
+            let deltaY = e.clientY - centerY;
+            
+            const distance = Math.sqrt(deltaX * deltaX + deltaY * deltaY);
+            if (distance > maxLimit) {
+                deltaX = (deltaX / distance) * maxLimit;
+                deltaY = (deltaY / distance) * maxLimit;
+            }
+            
+            setJoystickStickPos(deltaX, deltaY);
+        }
+
+        function onPointerUp() {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            // Return to center (spring load)
+            setJoystickStickPos(0, 0);
+            
+            window.removeEventListener('pointermove', onPointerMove);
+            window.removeEventListener('pointerup', onPointerUp);
+        }
+
+        housing.addEventListener('pointerdown', onPointerDown);
+
+        // --- Visualizer Rendering ---
+        
+        function resizeCanvases() {
+            canvasOsc.width = canvasOsc.parentElement.clientWidth;
+            canvasEnv.width = canvasEnv.parentElement.clientWidth;
+        }
+        window.addEventListener('resize', resizeCanvases);
+        resizeCanvases();
+
+        // 1. Audio Oscilloscope
+        const dataArray = new Uint8Array(256);
+        function drawOscilloscope() {
+            requestAnimationFrame(drawOscilloscope);
+            if (!analyserNode) return;
+            
+            analyserNode.getByteTimeDomainData(dataArray);
+            
+            ctxOsc.fillStyle = '#05040a';
+            ctxOsc.fillRect(0, 0, canvasOsc.width, canvasOsc.height);
+            
+            ctxOsc.lineWidth = 2;
+            ctxOsc.strokeStyle = '#00f0ff';
+            ctxOsc.beginPath();
+            
+            const sliceWidth = canvasOsc.width / 256;
+            let x = 0;
+            
+            let zeroCrossings = 0;
+            let prevVal = 128;
+            for (let i = 0; i < 256; i++) {
+                const v = dataArray[i];
+                const y = (v / 255) * canvasOsc.height;
+                
+                if (i === 0) {
+                    ctxOsc.moveTo(x, y);
+                } else {
+                    ctxOsc.lineTo(x, y);
+                }
+                
+                if (prevVal < 128 && v >= 128) {
+                    zeroCrossings++;
+                }
+                prevVal = v;
+                x += sliceWidth;
+            }
+            
+            ctxOsc.lineTo(canvasOsc.width, canvasOsc.height / 2);
+            ctxOsc.stroke();
+
+            if (audioCtx && zeroCrossings > 0) {
+                const periodInSamples = 256 / zeroCrossings;
+                const freq = audioCtx.sampleRate / periodInSamples;
+                if (freq > 40 && freq < 4000) {
+                    document.getElementById('txt-freq').innerText = `${Math.round(freq)} Hz`;
+                }
+            }
+        }
+
+        // 2. Buffer Envelope Drawer
+        function drawEnvelope() {
+            requestAnimationFrame(drawEnvelope);
+            if (!isWasmLoaded) return;
+            
+            const recLen = wasmGetRecordLength();
+            const playIdx = wasmGetPlayIndex();
+            const maxLen = wasmGetMaxBufferSize();
+            const state = wasmGetFSMState();
+            
+            ctxEnv.fillStyle = '#05040a';
+            ctxEnv.fillRect(0, 0, canvasEnv.width, canvasEnv.height);
+            
+            if (recLen === 0) {
+                ctxEnv.font = '12px Outfit';
+                ctxEnv.fillStyle = '#666';
+                ctxEnv.textAlign = 'center';
+                ctxEnv.fillText('NO ENVELOPE RECORDED', canvasEnv.width / 2, canvasEnv.height / 2);
+                return;
+            }
+
+            ctxEnv.strokeStyle = 'rgba(255,255,255,0.05)';
+            ctxEnv.lineWidth = 1;
+            ctxEnv.beginPath();
+            ctxEnv.moveTo(0, canvasEnv.height / 2);
+            ctxEnv.lineTo(canvasEnv.width, canvasEnv.height / 2);
+            ctxEnv.stroke();
+            
+            const step = canvasEnv.width / maxLen;
+            
+            // Draw X (Red)
+            ctxEnv.strokeStyle = '#ff3131';
+            ctxEnv.lineWidth = 1.5;
+            ctxEnv.beginPath();
+            for (let i = 0; i < recLen; i++) {
+                const val = wasmGetBufferSampleX(i);
+                const yPos = ((1.0 - val) / 2.0) * canvasEnv.height;
+                if (i === 0) ctxEnv.moveTo(0, yPos);
+                else ctxEnv.lineTo(i * step, yPos);
+            }
+            ctxEnv.stroke();
+            
+            // Draw Y (Blue)
+            ctxEnv.strokeStyle = '#00f0ff';
+            ctxEnv.lineWidth = 1.5;
+            ctxEnv.beginPath();
+            for (let i = 0; i < recLen; i++) {
+                const val = wasmGetBufferSampleY(i);
+                const yPos = ((1.0 - val) / 2.0) * canvasEnv.height;
+                if (i === 0) ctxEnv.moveTo(0, yPos);
+                else ctxEnv.lineTo(i * step, yPos);
+            }
+            ctxEnv.stroke();
+
+            // Draw playback head
+            if (state === 2 || state === 3) {
+                const headX = playIdx * step;
+                ctxEnv.strokeStyle = '#ffea00';
+                ctxEnv.lineWidth = 2;
+                ctxEnv.beginPath();
+                ctxEnv.moveTo(headX, 0);
+                ctxEnv.lineTo(headX, canvasEnv.height);
+                ctxEnv.stroke();
+            }
+        }
+    </script>
+    <script src="joyspeak_sim.js"></script>
+</body>
+</html>

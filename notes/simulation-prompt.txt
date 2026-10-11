@@ -1,0 +1,58 @@
+So I'm building JoySpeak, a gamepad-format joystick controlled speaker that can be networked and hung from RJ45 cables to make a multi-node sound installation. 
+
+The hardware is working, but is cumbersome to prototype network interactions on, so the goal is to have a coding AI make a PC-based version that let's me define the synthesis model on each as well as the kinds of network interactions that are possible. To get there we'll divide the work into two stages: first simulating first a single joyspeak node, the synthesis model(s) and the form of interaction possible using the joystick and buttons. For the second stage, we'll then make it possible to add and remove up to 20 nodes on the fly and define the network interactions between them e.g. in the form of what parameters are streamed between them. It's not necessary to get into details yet, I just want you to be aware that this is the end goal.
+
+The output I will need from you will be a clear watertight spec and prompt for the AI to follow in order to cleanly create the code. It should be optimised to take as few credits as possible and to build as little as possible, so very small codebase with little to build and easy to tweak elements myself if needed. The main open question is the form the code should take. It should be browser-based and not be necessary to build the underlying infrastructure. I heard web assembly could be a good fit, but I'm not sure if generating it is lightweight. I'm also not sure if a compiled or interpreted approach is best here, or something else?
+
+In terms of interaction, the primary controls are a two axis potentiometer with inbuilt button on left side, and two buttons with associated RGB LEDs on the right side. There is also one RGB LED above on the microcontroller itself that can be used. The controls should be simulated in absolute bare minimum GUI form for fine-grained mouse interaction (joystick), that allows parameters to changed live on each module. A goal should also be to connect a simple gamepad and have this control the broswer interaction directly, for more.
+
+In terms of synthesis model to keep things simple and constrained to begin with let's first take the Mutable Instruments Plaits FM Engine as the base synthesis mode, including amplitude control via low pass gate (LPG). The code for Plaits can be found here: https://github.com/pichenettes/eurorack/tree/master/plaits and the FM Engine specifically here: https://github.com/pichenettes/eurorack/blob/master/plaits/dsp/engine/fm_engine.cc. The key parameters are: 
+- FREQUENCY: fundamental pitch
+- HARMONICS: frequency ratio
+- TIMBRE: modulation index
+- MORPH: feedback, in the form of operator 2 modulating its own phase (past 12 o’clock, rough!) or operator 1’s phase (before 12 o’clock, chaotic!).
+- TRIGGER: what causes a sound to play
+- LEVEL: the overall volume level of the sound
+- DECAY: the decay time/ringing length of the LPG (and simultaneously sets the decay time of the internal modulation envelope
+
+The code should be crafted as to be able to drop in more synthesis models later
+
+In terms of joystick interaction, one of the primary constraints compared to knob interaction of synthesisers is the nature of the joystick snapping back to it's centre. The focus here is on making the most of this natural constraint, by establishing four user-defined 'cardinal presets' based on the 
+
+## Setup mode
+- the aim here is to set the various parameters of the four available 'cardinal presets', represented by the up, down, left, right positions
+- the button built into the potentiometer cycles through the core synthesis parameter that is being set: FREQUENCY (white), HARMONICS (red), TIMBRE (green), MORPH (blue)
+- all parameters are initialise at their centre value
+- we move to one of the four cardinal directions (up, left, right, down), hold button 1, then move around the outer edge of the circle to hear the parameter change in real time and when button 1 is released, the new value is replaced in the preset
+
+Thoughts:
+- I imagine that half way clockwise will take us up to the max value of the parameter, and half way counterclockwise to the min value
+- I see that there will be a 'jump' when we cross the threshold point directly opposite the cardinal direction, but that's ok for now
+
+## Play mode - playing back (and interpolating between) the 'cardinal presets'
+- moving from centre to outer edge triggers a sound to play at the combination of four paramters that are stored there
+- the rate of movement from centre to outer edge determines the overall volume of the sound
+- the rate of release back to the centre controls decay (LPG release) - such that long decaying, short staccato notes or something inbetween can be created
+
+- it's not just the absolute cardinal presets that are available but also the (linearly?) interpolated points between them
+- Q: is something similar also possible for attack?
+[eventually maybe the synthesis model can also be changed for each cardinal point, if the parameters relate]
+
+Thoughts and open questions:
+- When a cardinal parameter is set for a second time, should the cardinal position 'pick up' from the last value or set back to an absolute? What are the pros and cons here?
+- I don't know if in setup mode the same 'triggering' and volume aspects should apply as in play mode
+
+## Gesture record mode
+This is less well defined, but the basics are:
+- holding button 2 records the position, and the LED above it goes red
+- letting go immediately starts playback and the LED above it goes green
+- when playing back does joystick do anything? "punch in" recording should be possible but how? and how to stop playback and return to live control?
+
+Thoughts:
+- I guess there should be a 'max record time'
+- I imagine each joyspeak can have up to four gestures recorded on it, but have no idea how to select them. Maybe button two when held can change base colour to represent tha 
+- a way to slow down, speed up or scrub through the overall gesture and/or forwards to backwards play modes would be cool
+- a metronome might be cool, but do we want to introduce the idea of tempo at all
+- all this can get complex quickly, help me keep it simple but allow us to stay out of simple looping territory that will be annoying in a large installation context. I prefer the idea of storing a number of different gestures or phrases that can be repurposed or 
+
+Grill me, then produce a spec in the form you think best.
